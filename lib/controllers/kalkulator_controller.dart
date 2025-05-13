@@ -10,186 +10,208 @@ class KalkulatorController extends ChangeNotifier {
   String get output => _output;
 
   final List<String> _operators = ['+', '-', '/', '*', '^', '.', '%'];
+  bool get isResultShown => _isResultShown;
 
+  // Tambahan: History
+  final List<Map<String, String>> _history = [];
+  List<Map<String, String>> get history => _history;
+
+  // Validasi ekspresi matematika
   bool _isValidInput(String input) {
     final regex = RegExp(r'^[0-9+\-x*/().%]+$');
     if (!regex.hasMatch(input)) return false;
 
-    // Check for balanced parentheses
     int balance = 0;
-    for (int i = 0; i < input.length; i++) {
-      if (input[i] == '(') {
-        balance++;
-      } else if (input[i] == ')') balance--;
-      if (balance < 0) return false; // Closing before opening
+    for (final char in input.runes) {
+      if (String.fromCharCode(char) == '(') balance++;
+      if (String.fromCharCode(char) == ')') balance--;
+      if (balance < 0) return false;
     }
-    if (balance != 0) return false;
-
-    return true;
+    return balance == 0;
   }
 
+  // Hitung hasil
   void _calculateOutput() {
     if (_input.isEmpty) {
       _output = '';
       return;
     }
 
-    // Jangan tampilkan output jika input hanya angka tanpa operator
-    bool containsOperator = _operators.any((op) => _input.contains(op));
-    if (!containsOperator) {
+    final lastChar = _input[_input.length - 1];
+    final containsOperator = _operators.any(_input.contains);
+
+    if (!containsOperator ||
+        (_operators.contains(lastChar) && lastChar != '%')) {
       _output = '';
       return;
     }
 
-    // Jangan tampilkan output jika input berakhir dengan operator selain '%'
-    String lastChar = _input[_input.length - 1];
-    if (_operators.contains(lastChar) && lastChar != '%') {
-      _output = '';
-      return;
-    }
-
-    if (_isValidInput(_input)) {
-      try {
-        final result = KalkulatorLogic.hitung(_input);
-        final val = double.tryParse(result);
-        if (val != null && val % 1 == 0) {
-          _output = val.toInt().toString();
-        } else {
-          _output = result;
-        }
-      } catch (e) {
-        _output = 'Error: ${e.toString()}';
-      }
-    } else {
+    if (!_isValidInput(_input)) {
       _output = 'Invalid Input: Please check your expression';
+      return;
+    }
+
+    try {
+      final result = KalkulatorLogic.hitung(_input);
+      final val = double.tryParse(result);
+      _output = (val != null && val % 1 == 0) ? val.toInt().toString() : result;
+    } catch (e) {
+      _output = 'Error: ${e.toString()}';
     }
   }
 
-  void onButtonPressed(String value) {
-    if (value == 'AC') {
-      _input = '';
-      _output = '';
-      _isResultShown = false;
-    } else if (value == '=') {
-      if (!_isResultShown) {
-        _calculateOutput();
-        String lastChar = _input.isNotEmpty ? _input[_input.length - 1] : '';
-        bool containsOperator = _operators.any((op) => _input.contains(op));
-        if (_operators.contains(lastChar) && lastChar != '%') {
-          // Jangan hapus input jika berakhir dengan operator selain '%'
-          // biarkan input tetap ada
-        } else if (!containsOperator) {
-          // Jika input hanya angka tanpa operator, jangan hapus input
-          // biarkan input tetap ada
-        } else {
-          // Hapus input dan hanya tampilkan output
-          _input = '';
-        }
-        _isResultShown = true;
-      }
-      // Jika sudah menampilkan hasil, tekan '=' lagi tidak mengubah apa-apa
-    } else if (value == '⌫') {
-      if (_input.isNotEmpty) {
-        _input = _input.substring(0, _input.length - 1);
-        _calculateOutput();
-      }
-      _isResultShown = false;
-    } else if (_isResultShown) {
-      // Jika hasil sudah ditampilkan dan user menekan tombol
-      if (value == '%') {
-        // Khusus untuk %, tambahkan % ke output lalu jadikan input baru
-        _input = '$_output%';
-        _output = '';
-        _isResultShown = false;
-      } else if (_operators.contains(value)) {
-        // Jika tombol adalah operator selain %, lanjutkan perhitungan dengan hasil sebelumnya
-        _input = _output + value;
-        _output = '';
-        _isResultShown = false;
-      } else {
-        // Jika tombol adalah angka atau lainnya, lanjutkan input tanpa menghapus input sebelumnya
-        _input += value;
-        _output = '';
-        _isResultShown = false;
-      }
+  // Reset kalkulator
+  void _reset() {
+    _input = '';
+    _output = '';
+    _isResultShown = false;
+  }
+
+  // Tombol "=" ditekan
+  void _handleEquals() {
+    if (_isResultShown) return;
+
+    _calculateOutput();
+
+    final lastChar = _input.isNotEmpty ? _input[_input.length - 1] : '';
+    final containsOperator = _operators.any(_input.contains);
+
+    if (!containsOperator ||
+        (_operators.contains(lastChar) && lastChar != '%')) {
+      return;
+    }
+
+    // Simpan ke history jika hasil valid
+    if (_output.isNotEmpty && !_output.startsWith('Error')) {
+      _history.add({
+        'input': _input,
+        'output': _output,
+      });
+    }
+
+    _input = _output;
+    _isResultShown = true;
+  }
+
+  // Hapus karakter terakhir
+  void _handleDelete() {
+    if (_input.isNotEmpty) {
+      _input = _input.substring(0, _input.length - 1);
+      _calculateOutput();
+    }
+    _isResultShown = false;
+  }
+
+  // Tangani operator
+  void _handleOperator(String value) {
+    final lastChar = _input.isNotEmpty ? _input[_input.length - 1] : '';
+    if (_input.isEmpty) return;
+
+    if (lastChar == '%') {
+      _input += value;
+    } else if (_operators.contains(lastChar)) {
+      _input = _input.substring(0, _input.length - 1) + value;
     } else {
-      String lastChar = _input.isNotEmpty ? _input[_input.length - 1] : '';
-      if (value == '.') {
-        if (_input.isEmpty || _operators.contains(lastChar)) {
-          if (!_input.endsWith('0.')) {
-            _input += '0.';
-          }
+      _input += value;
+    }
+  }
+
+  // Tangani titik desimal
+  void _handleDot() {
+    final lastChar = _input.isNotEmpty ? _input[_input.length - 1] : '';
+
+    if (_input.isEmpty || _operators.contains(lastChar)) {
+      if (!_input.endsWith('0.')) _input += '0.';
+      return;
+    }
+
+    final parts = _input.split(RegExp(r'[+\-*/^()]'));
+    if (parts.isNotEmpty && parts.last.contains('.')) return;
+
+    _input += '.';
+  }
+
+  // Fungsi spesial seperti π, faktorial, 1/x
+  void _handleSpecialFunction(String value) {
+    switch (value) {
+      case 'π':
+        _input += '3.14';
+        break;
+      case 'x!':
+        final num = int.tryParse(_input);
+        if (num != null && num >= 0) {
+          _output = List.generate(num, (i) => i + 1)
+              .fold(1, (a, b) => a * b)
+              .toString();
         } else {
-          final parts = _input.split(RegExp(r'[+\-*/^()]'));
-          final lastNumber = parts.isNotEmpty ? parts.last : '';
-          if (lastNumber.contains('.')) return;
-          _input += value;
+          _output = 'Error: Invalid factorial input';
         }
-      } else if (value == '%') {
+        break;
+      case '1/x':
+        final num = double.tryParse(_input);
+        if (num != null && num != 0) {
+          _output = (1 / num).toStringAsFixed(6);
+        } else {
+          _output = 'Error: Division by zero';
+        }
+        break;
+    }
+  }
+
+  // Clear semua riwayat (opsional)
+  void clearHistory() {
+    _history.clear();
+    notifyListeners();
+  }
+
+  // Tombol ditekan
+  void onButtonPressed(String value) {
+    switch (value) {
+      case 'AC':
+        _reset();
+        break;
+      case '=':
+        _handleEquals();
+        break;
+      case '⌫':
+        _handleDelete();
+        break;
+      case 'π':
+      case 'x!':
+      case '1/x':
+        _handleSpecialFunction(value);
+        break;
+      case '.':
+        _handleDot();
+        break;
+      case '%':
         if (_input.isNotEmpty &&
             (RegExp(r'[0-9]$').hasMatch(_input) || _input.endsWith(')'))) {
           _input += '%';
         }
-      } else if (value == 'π') {
-        _input += '3.14';
-      } else if (value == 'x!') {
-        try {
-          final num = int.tryParse(_input);
-          if (num != null && num >= 0) {
-            int result = 1;
-            for (int i = 1; i <= num; i++) {
-              result *= i;
-            }
-            _output = result.toString();
+        break;
+      case 'CH': // Clear History
+        clearHistory();
+        break;
+      default:
+        if (_isResultShown) {
+          if (_operators.contains(value)) {
+            // Operator → lanjutkan perhitungan dengan hasil sebelumnya
+            _input = _output + value;
           } else {
-            _output = 'Error: Invalid factorial input';
+            // Angka atau titik → mulai perhitungan baru
+            _input = value;
           }
-        } catch (e) {
-          _output = 'Error: ${e.toString()}';
-        }
-      } else if (value == '1/x') {
-        try {
-          final num = double.tryParse(_input);
-          if (num != null && num != 0) {
-            _output = (1 / num).toStringAsFixed(6);
-          } else {
-            _output = 'Error: Division by zero';
-          }
-        } catch (e) {
-          _output = 'Error: ${e.toString()}';
-        }
-      } else if (_operators.contains(value)) {
-        if (_input.isEmpty) {
-          return;
-        }
-        if (lastChar == '%') {
-          // Jika input berakhir dengan %, dan user input operator, tambahkan operator setelah %
-          _input += value;
-        } else if (_operators.contains(lastChar)) {
-          // Jika input berakhir dengan operator, ganti operator terakhir dengan yang baru
-          _input = _input.substring(0, _input.length - 1) + value;
-        } else {
-          _input += value;
-        }
-      } else {
-        if (lastChar != '' &&
-            _operators.contains(lastChar) &&
-            !_isResultShown) {
-          // Jika input berakhir dengan operator dan user input angka, lanjutkan perhitungan
-          _input += value;
-        } else if (_isResultShown) {
-          // Jika hasil sudah ditampilkan dan user input angka, lanjutkan input tanpa menghapus input sebelumnya
-          _input += value;
           _output = '';
           _isResultShown = false;
-          notifyListeners();
-          return;
+        } else if (_operators.contains(value)) {
+          _handleOperator(value);
         } else {
           _input += value;
         }
-      }
-      _calculateOutput();
+        break;
     }
+
     notifyListeners();
   }
 }
