@@ -13,9 +13,9 @@ class KalkulatorApp extends StatelessWidget {
     return MaterialApp(
       title: 'Kalkulator',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.light(useMaterial3: true),
+      theme: ThemeData.light(useMaterial3: false),
       darkTheme: ThemeData.dark(useMaterial3: true),
-      themeMode: ThemeMode.system, // otomatis mengikuti mode sistem smartphone
+      themeMode: ThemeMode.dark, // otomatis mengikuti mode sistem smartphone
       home: KalkulatorPage(),
     );
   }
